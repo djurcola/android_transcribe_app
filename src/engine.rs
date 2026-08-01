@@ -29,6 +29,11 @@ const MODEL_TRANSLATE_FILE: &str = "model_translate";
 /// Optional file in filesDir with the CPU thread count for inference.
 /// Absent/invalid/0 = default (all cores).
 const MODEL_THREADS_FILE: &str = "model_threads";
+/// Optional file in filesDir with the user's custom words, one per line
+/// (written by `CustomWordsPrefs`). Whisper models receive them as the
+/// initial prompt — a recognition bias toward these words; models without
+/// the whisper run extension ignore them.
+const MODEL_CUSTOM_WORDS_FILE: &str = "custom_words";
 
 /// Longest audio passed to the model in one run (60 s). Offline conformer
 /// models use full self-attention, whose cost grows quadratically with input
@@ -58,6 +63,7 @@ impl Engine {
         language: Option<String>,
         translate: bool,
         threads: i32,
+        custom_words: Vec<String>,
     ) -> Result<Engine, String> {
         if !model_path.is_file() {
             return Err(format!("model file not found: {}", model_path.display()));
@@ -92,6 +98,16 @@ impl Engine {
         // pass is the better trade: worst case is a worse line of text, not
         // a multiplied wait. temperature_inc = 0 turns the retry ladder off;
         // models that don't take the whisper run extension are unaffected.
+        // Custom words become Whisper's initial prompt, a recognition bias
+        // toward the user's names/terms. This is the only place they enter the
+        // model: the run extension is built solely for models that accept the
+        // whisper run extension, so non-Whisper models get no substitution and
+        // simply keep transcribing as before.
+        let initial_prompt = if custom_words.is_empty() {
+            None
+        } else {
+            Some(custom_words.join(", "))
+        };
         let run_ext = if model.accepts_ext(
             transcribe_cpp::ExtSlot::Run,
             transcribe_cpp::sys::TRANSCRIBE_EXT_KIND_WHISPER_RUN,
@@ -99,6 +115,7 @@ impl Engine {
             Some(transcribe_cpp::RunExtension::Whisper(
                 transcribe_cpp::WhisperRunOptions {
                     temperature_inc: Some(0.0),
+                    initial_prompt,
                     ..Default::default()
                 },
             ))
@@ -107,10 +124,11 @@ impl Engine {
         };
 
         log::info!(
-            "engine: {} threads, task {:?}, single-pass decode: {}",
+            "engine: {} threads, task {:?}, single-pass decode: {}, custom words: {}",
             threads,
             task,
-            run_ext.is_some()
+            run_ext.is_some(),
+            custom_words.len()
         );
         let options = transcribe_cpp::SessionOptions {
             n_threads: threads,
@@ -435,6 +453,22 @@ fn read_config(path: &Path) -> Option<String> {
     }
 }
 
+/// Reads the custom-word list (one entry per line) written by `CustomWordsPrefs`.
+/// Lines are trimmed and blanks dropped; the Java side is the authority for
+/// normalization, casing, ordering and dedup, so this only guards against stray
+/// empty lines. Absent file = no custom words.
+fn read_custom_words(path: &Path) -> Vec<String> {
+    match std::fs::read_to_string(path) {
+        Ok(s) => s
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .map(String::from)
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
 /// Performs the model load: the selected imported GGUF if any (falling back
 /// to the bundled model on failure), otherwise the bundled model.
 fn do_load(env: &mut JNIEnv, context: &JObject) -> Result<(), String> {
@@ -457,11 +491,12 @@ fn do_load(env: &mut JNIEnv, context: &JObject) -> Result<(), String> {
         .and_then(|s| s.parse::<i32>().ok())
         .filter(|&n| n > 0)
         .unwrap_or_else(performance_core_count);
+    let custom_words = read_custom_words(&files_dir.join(MODEL_CUSTOM_WORDS_FILE));
 
     if let Some(name) = read_config(&files_dir.join(ACTIVE_MODEL_FILE)) {
         let path = files_dir.join("models").join(&name);
         notify_status(env, context, &format!("Loading model {}...", name));
-        match Engine::load(&path, language.clone(), translate, threads) {
+        match Engine::load(&path, language.clone(), translate, threads, custom_words.clone()) {
             Ok(engine) => {
                 let status = engine.ready_status;
                 *GLOBAL_ENGINE.lock().unwrap() = Some(Arc::new(Mutex::new(engine)));
@@ -490,7 +525,7 @@ fn do_load(env: &mut JNIEnv, context: &JObject) -> Result<(), String> {
 
     notify_status(env, context, "Loading model...");
 
-    match Engine::load(&path, language, translate, threads) {
+    match Engine::load(&path, language, translate, threads, custom_words) {
         Ok(engine) => {
             let status = engine.ready_status;
             *GLOBAL_ENGINE.lock().unwrap() = Some(Arc::new(Mutex::new(engine)));
