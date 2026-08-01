@@ -697,6 +697,99 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"/>
                     </LinearLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/bubble_unload_title"
+                        android:textAppearance="?attr/textAppearanceBodyLarge"
+                        android:layout_marginTop="16dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/bubble_unload_desc"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:layout_marginTop="2dp"/>
+
+                    <RadioGroup
+                        android:id="@+id/rg_bubble_unload"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="4dp">
+
+                        <RadioButton
+                            android:id="@+id/rb_unload_never"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/bubble_unload_never"/>
+
+                        <RadioButton
+                            android:id="@+id/rb_unload_5"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/bubble_unload_5"/>
+
+                        <RadioButton
+                            android:id="@+id/rb_unload_15"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/bubble_unload_15"/>
+
+                        <RadioButton
+                            android:id="@+id/rb_unload_30"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/bubble_unload_30"/>
+                    </RadioGroup>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/bubble_size_title"
+                        android:textAppearance="?attr/textAppearanceBodyLarge"
+                        android:layout_marginTop="16dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/bubble_size_desc"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:layout_marginTop="2dp"/>
+
+                    <RadioGroup
+                        android:id="@+id/rg_bubble_size"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="4dp">
+
+                        <RadioButton
+                            android:id="@+id/rb_size_small"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/bubble_size_small"/>
+
+                        <RadioButton
+                            android:id="@+id/rb_size_medium"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/bubble_size_medium"/>
+
+                        <RadioButton
+                            android:id="@+id/rb_size_large"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/bubble_size_large"/>
+                    </RadioGroup>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

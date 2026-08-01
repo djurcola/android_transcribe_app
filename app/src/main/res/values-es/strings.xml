@@ -149,6 +149,19 @@
     <string name="bubble_notification_text">Toca la burbuja para grabar voz</string>
     <string name="bubble_stop_recording">Detener grabación</string>
     <string name="bubble_hide">Ocultar burbuja</string>
+    <string name="bubble_loading">Cargando modelo…</string>
+    <string name="bubble_load_failed">No se pudo cargar el modelo. Inténtalo de nuevo.</string>
+    <string name="bubble_unload_title">Descargar en inactividad</string>
+    <string name="bubble_unload_desc">Para ahorrar memoria y batería, descarga el modelo cuando la burbuja lleva un rato inactiva. La burbuja sigue visible y usable; la próxima grabación puede tardar un momento en recargar el modelo.</string>
+    <string name="bubble_unload_never">Nunca</string>
+    <string name="bubble_unload_5">5 min</string>
+    <string name="bubble_unload_15">15 min</string>
+    <string name="bubble_unload_30">30 min</string>
+    <string name="bubble_size_title">Tamaño de la burbuja</string>
+    <string name="bubble_size_desc">Qué tan grande aparece la burbuja flotante en pantalla.</string>
+    <string name="bubble_size_small">Pequeño</string>
+    <string name="bubble_size_medium">Mediano</string>
+    <string name="bubble_size_large">Grande</string>
 
     <string name="section_a11y">Inserción directa (opcional)</string>
     <string name="desc_a11y">Cuando está activado, las transcripciones de la burbuja se insertan directamente en el campo de texto enfocado mediante un servicio de accesibilidad. Si falla, el texto se copia al portapapeles. Este servicio solo escribe en el campo editable enfocado; nunca lee ni almacena contenido de campos y omite campos de contraseña.</string>

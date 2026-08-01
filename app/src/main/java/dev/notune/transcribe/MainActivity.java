@@ -95,6 +95,8 @@ public class MainActivity extends AppCompatActivity {
         setupBubbleSwitch();
         setupA11ySwitch();
         setupRetentionRadio();
+        setupBubbleUnloadRadio();
+        setupBubbleSizeRadio();
 
         benchButton = findViewById(R.id.btn_benchmark);
         benchResultText = findViewById(R.id.text_bench_result);
@@ -386,6 +388,50 @@ public class MainActivity extends AppCompatActivity {
             HistoryPrefs.setRetention(this, val);
             TranscriptionHistory.get(this).prune();
         });
+    }
+
+    private void setupBubbleUnloadRadio() {
+        RadioGroup rg = findViewById(R.id.rg_bubble_unload);
+        switch (BubblePrefs.getUnloadMinutes(this)) {
+            case 0: rg.check(R.id.rb_unload_never); break;
+            case 5: rg.check(R.id.rb_unload_5); break;
+            case 30: rg.check(R.id.rb_unload_30); break;
+            default: rg.check(R.id.rb_unload_15); break;
+        }
+        rg.setOnCheckedChangeListener((group, checkedId) -> {
+            int val;
+            if (checkedId == R.id.rb_unload_never) val = 0;
+            else if (checkedId == R.id.rb_unload_5) val = 5;
+            else if (checkedId == R.id.rb_unload_30) val = 30;
+            else val = 15;
+            BubblePrefs.setUnloadMinutes(this, val);
+            notifyBubbleRefresh();
+        });
+    }
+
+    private void setupBubbleSizeRadio() {
+        RadioGroup rg = findViewById(R.id.rg_bubble_size);
+        switch (BubblePrefs.getSizeDp(this)) {
+            case 48: rg.check(R.id.rb_size_small); break;
+            case 72: rg.check(R.id.rb_size_large); break;
+            default: rg.check(R.id.rb_size_medium); break;
+        }
+        rg.setOnCheckedChangeListener((group, checkedId) -> {
+            int val;
+            if (checkedId == R.id.rb_size_small) val = 48;
+            else if (checkedId == R.id.rb_size_large) val = 72;
+            else val = 56;
+            BubblePrefs.setSizeDp(this, val);
+            notifyBubbleRefresh();
+        });
+    }
+
+    /** Tells a visible bubble to re-read its settings (size / unload interval). */
+    private void notifyBubbleRefresh() {
+        if (!BubblePrefs.isEnabled(this)) return;
+        Intent intent = new Intent(this, BubbleService.class);
+        intent.setAction(BubbleService.ACTION_REFRESH);
+        startService(intent);
     }
 
     @Override

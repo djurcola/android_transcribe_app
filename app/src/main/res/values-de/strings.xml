@@ -149,6 +149,19 @@
     <string name="bubble_notification_text">Tippe auf die Blase, um Sprache aufzunehmen</string>
     <string name="bubble_stop_recording">Aufnahme stoppen</string>
     <string name="bubble_hide">Blase ausblenden</string>
+    <string name="bubble_loading">Modell wird geladen…</string>
+    <string name="bubble_load_failed">Modell konnte nicht geladen werden. Bitte erneut versuchen.</string>
+    <string name="bubble_unload_title">Bei Inaktivität entladen</string>
+    <string name="bubble_unload_desc">Um Speicher und Akku zu sparen, wird das Modell entladen, wenn die Blase eine Weile inaktiv war. Die Blase bleibt sichtbar und nutzbar; die nächste Aufnahme muss das Modell eventuell kurz neu laden.</string>
+    <string name="bubble_unload_never">Nie</string>
+    <string name="bubble_unload_5">5 Min</string>
+    <string name="bubble_unload_15">15 Min</string>
+    <string name="bubble_unload_30">30 Min</string>
+    <string name="bubble_size_title">Blasengröße</string>
+    <string name="bubble_size_desc">Wie groß die schwebende Blase auf dem Bildschirm erscheint.</string>
+    <string name="bubble_size_small">Klein</string>
+    <string name="bubble_size_medium">Mittel</string>
+    <string name="bubble_size_large">Groß</string>
 
     <string name="section_a11y">Direktes Einfügen (optional)</string>
     <string name="desc_a11y">Wenn aktiviert, werden Transkriptionen der Mikrofon-Blase direkt in das fokussierte Textfeld über einen Bedienungshilfe-Dienst eingefügt. Schlägt das Einfügen fehl, wird der Text stattdessen in die Zwischenablage kopiert. Dieser Dienst schreibt nur in das fokussierte bearbeitbare Feld; er liest oder speichert niemals Feldinhalte und überspringt Passwortfelder.</string>

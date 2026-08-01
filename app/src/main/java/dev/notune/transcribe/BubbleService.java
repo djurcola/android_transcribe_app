@@ -22,8 +22,10 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 public class BubbleService extends Service {
@@ -31,6 +33,7 @@ public class BubbleService extends Service {
     public static final String ACTION_SHOW = "dev.notune.transcribe.BUBBLE_SHOW";
     public static final String ACTION_HIDE = "dev.notune.transcribe.BUBBLE_HIDE";
     public static final String ACTION_STOP_RECORDING = "dev.notune.transcribe.BUBBLE_STOP_REC";
+    public static final String ACTION_REFRESH = "dev.notune.transcribe.BUBBLE_REFRESH";
     private static final String CHANNEL_ID = "BubbleChannel";
     private static final int NOTIFICATION_ID = 23456;
 
@@ -46,15 +49,21 @@ public class BubbleService extends Service {
     private WindowManager mWindowManager;
     private View mBubbleView;
     private ImageView mBubbleIcon;
+    private ProgressBar mBubbleProgress;
+    private WindowManager.LayoutParams mParams;
     private Handler mMainHandler;
+    private Runnable mUnloadRunnable;
     private boolean isRecording = false;
     private boolean isProcessing = false;
+    private boolean isReloading = false;
+    private boolean isModelUnloaded = false;
 
     @Override
     public void onCreate() {
         super.onCreate();
         mMainHandler = new Handler(Looper.getMainLooper());
         mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        mUnloadRunnable = this::performIdleUnload;
         createNotificationChannel();
     }
 
@@ -90,6 +99,12 @@ public class BubbleService extends Service {
             if (isRecording) {
                 stopRecordingFlow();
             }
+        } else if (ACTION_REFRESH.equals(action)) {
+            // Settings (size / idle-unload interval) changed while visible.
+            if (mBubbleView != null) {
+                applyBubbleSize();
+                scheduleIdleUnload();
+            }
         }
         return START_NOT_STICKY;
     }
@@ -99,10 +114,11 @@ public class BubbleService extends Service {
 
         mBubbleView = LayoutInflater.from(this).inflate(R.layout.bubble_overlay, null);
         mBubbleIcon = mBubbleView.findViewById(R.id.bubble_icon);
+        mBubbleProgress = mBubbleView.findViewById(R.id.bubble_progress);
 
         int layoutFlag = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
 
-        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+        mParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 layoutFlag,
@@ -110,25 +126,29 @@ public class BubbleService extends Service {
                         | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT);
 
-        params.gravity = Gravity.TOP | Gravity.START;
+        mParams.gravity = Gravity.TOP | Gravity.START;
         int savedX = BubblePrefs.getX(this);
         int savedY = BubblePrefs.getY(this);
         if (savedX >= 0 && savedY >= 0) {
-            params.x = savedX;
-            params.y = savedY;
+            mParams.x = savedX;
+            mParams.y = savedY;
         } else {
-            params.x = getResources().getDisplayMetrics().widthPixels - 160;
-            params.y = getResources().getDisplayMetrics().heightPixels / 3;
+            mParams.x = getResources().getDisplayMetrics().widthPixels - 160;
+            mParams.y = getResources().getDisplayMetrics().heightPixels / 3;
         }
 
-        mWindowManager.addView(mBubbleView, params);
+        mWindowManager.addView(mBubbleView, mParams);
+        applyBubbleSize();
         updateBubbleState();
-        makeDraggable(params);
+        makeDraggable();
 
         initNative(this);
+        isModelUnloaded = false;
+        scheduleIdleUnload();
     }
 
-    private void makeDraggable(WindowManager.LayoutParams params) {
+    private void makeDraggable() {
+        final WindowManager.LayoutParams params = mParams;
         mBubbleView.setOnTouchListener(new View.OnTouchListener() {
             private float downX, downY;
             private int downParamX, downParamY;
@@ -170,41 +190,188 @@ public class BubbleService extends Service {
     }
 
     private void onBubbleTap() {
-        if (isProcessing) return;
+        // Ignore taps while transcribing or reloading: keeps a rapid double
+        // tap from starting two recordings or racing the async reload.
+        if (isProcessing || isReloading) return;
         if (isRecording) {
             stopRecordingFlow();
+            return;
+        }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, R.string.bubble_need_mic, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (isModelUnloaded) {
+            reloadThenRecord();
         } else {
-            if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
-                    != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, R.string.bubble_need_mic, Toast.LENGTH_SHORT).show();
-                return;
-            }
-            isRecording = true;
-            updateBubbleState();
-            startRecordingNative();
+            beginRecording();
         }
     }
 
+    private void beginRecording() {
+        cancelIdleUnload();
+        isRecording = true;
+        updateBubbleState();
+        startRecordingNative();
+    }
+
+    /**
+     * The model was unloaded to save memory/battery. Show a loading spinner,
+     * reload asynchronously on a background thread (never blocking the UI), and
+     * only start recording once the engine reports ready. Re-validates state and
+     * permission before starting so a race can never begin a recording with no
+     * session; on failure the bubble simply returns to its idle, still-unloaded
+     * look and the overlay stays usable.
+     */
+    private void reloadThenRecord() {
+        isReloading = true;
+        isProcessing = true;
+        cancelIdleUnload();
+        updateBubbleState();
+        new Thread(() -> {
+            final boolean ok = ensureEngineNative();
+            mMainHandler.post(() -> {
+                isReloading = false;
+                if (mBubbleView == null) {
+                    isProcessing = false;
+                    return;
+                }
+                if (!ok) {
+                    isProcessing = false;
+                    isModelUnloaded = true;
+                    updateBubbleState();
+                    Toast.makeText(this, R.string.bubble_load_failed, Toast.LENGTH_SHORT).show();
+                    scheduleIdleUnload();
+                    return;
+                }
+                isModelUnloaded = false;
+                isProcessing = false;
+                if (isRecording) {
+                    updateBubbleState();
+                    return;
+                }
+                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    updateBubbleState();
+                    Toast.makeText(this, R.string.bubble_need_mic, Toast.LENGTH_SHORT).show();
+                    scheduleIdleUnload();
+                    return;
+                }
+                beginRecording();
+            });
+        }).start();
+    }
+
     private void stopRecordingFlow() {
+        cancelIdleUnload();
         isRecording = false;
         isProcessing = true;
         updateBubbleState();
         stopRecordingNative();
     }
 
+    // --- Battery-aware idle unload -----------------------------------------
+
+    /**
+     * Arms a single delayed unload callback for when the bubble sits idle. Any
+     * previously armed callback is cancelled first, so there is exactly one
+     * pending callback and no polling/wakeups. "Never" (0) arms nothing.
+     */
+    private void scheduleIdleUnload() {
+        cancelIdleUnload();
+        if (mBubbleView == null) return;
+        if (isRecording || isProcessing || isReloading) return;
+        int minutes = BubblePrefs.getUnloadMinutes(this);
+        if (minutes <= 0) return;
+        mMainHandler.postDelayed(mUnloadRunnable, minutes * 60_000L);
+    }
+
+    private void cancelIdleUnload() {
+        if (mUnloadRunnable != null) mMainHandler.removeCallbacks(mUnloadRunnable);
+    }
+
+    /**
+     * Fired by the delayed callback. Drops the heavy model only if the engine
+     * is genuinely idle (no active transcription anywhere in this process —
+     * see engine::unload_if_idle). The overlay and foreground service stay
+     * visible and usable; the next tap reloads. If another engine user is
+     * busy, a single retry is re-armed instead of polling.
+     */
+    private void performIdleUnload() {
+        if (mBubbleView == null) return;
+        if (isRecording || isProcessing || isReloading) return;
+        new Thread(() -> {
+            final boolean unloaded = unloadNative();
+            mMainHandler.post(() -> {
+                if (mBubbleView == null) return;
+                if (isRecording || isProcessing || isReloading) return;
+                if (unloaded) {
+                    isModelUnloaded = true;
+                    updateBubbleState();
+                } else {
+                    scheduleIdleUnload();
+                }
+            });
+        }).start();
+    }
+
+    // --- Sizing ------------------------------------------------------------
+
+    /**
+     * Applies the persisted bubble diameter to an already-visible bubble:
+     * resizes the overlay and scales its inner icon/spinner proportionally,
+     * keeping at least a 48dp touch target, and nudges the position back on
+     * screen if the resize would push it off.
+     */
+    private void applyBubbleSize() {
+        if (mBubbleView == null || mParams == null) return;
+        int dp = BubblePrefs.getSizeDp(this);
+        float density = getResources().getDisplayMetrics().density;
+        int sizePx = Math.round(dp * density);
+        int innerPx = Math.round((dp / 2f) * density);
+
+        mParams.width = sizePx;
+        mParams.height = sizePx;
+        setViewSize(mBubbleIcon, innerPx);
+        setViewSize(mBubbleProgress, innerPx);
+
+        int maxX = Math.max(0, getResources().getDisplayMetrics().widthPixels - sizePx);
+        int maxY = Math.max(0, getResources().getDisplayMetrics().heightPixels - sizePx);
+        mParams.x = Math.min(Math.max(0, mParams.x), maxX);
+        mParams.y = Math.min(Math.max(0, mParams.y), maxY);
+
+        mWindowManager.updateViewLayout(mBubbleView, mParams);
+    }
+
+    private void setViewSize(View v, int px) {
+        if (v == null) return;
+        ViewGroup.LayoutParams lp = v.getLayoutParams();
+        lp.width = px;
+        lp.height = px;
+        v.setLayoutParams(lp);
+    }
+
     private void updateBubbleState() {
         mMainHandler.post(() -> {
-            if (mBubbleIcon == null) return;
+            if (mBubbleIcon == null || mBubbleView == null) return;
+            boolean loading = isProcessing || isReloading;
             if (isRecording) {
-                mBubbleIcon.setImageResource(R.drawable.ic_mic);
+                mBubbleIcon.setVisibility(View.VISIBLE);
+                mBubbleIcon.setImageResource(R.drawable.ic_stop);
+                if (mBubbleProgress != null) mBubbleProgress.setVisibility(View.GONE);
                 mBubbleView.setBackgroundResource(R.drawable.bg_bubble_recording);
                 mBubbleView.setContentDescription(getString(R.string.bubble_recording));
-            } else if (isProcessing) {
-                mBubbleIcon.setImageResource(R.drawable.ic_mic);
+            } else if (loading) {
+                mBubbleIcon.setVisibility(View.GONE);
+                if (mBubbleProgress != null) mBubbleProgress.setVisibility(View.VISIBLE);
                 mBubbleView.setBackgroundResource(R.drawable.bg_bubble_processing);
-                mBubbleView.setContentDescription(getString(R.string.bubble_processing));
+                mBubbleView.setContentDescription(getString(
+                        isReloading ? R.string.bubble_loading : R.string.bubble_processing));
             } else {
+                mBubbleIcon.setVisibility(View.VISIBLE);
                 mBubbleIcon.setImageResource(R.drawable.ic_mic);
+                if (mBubbleProgress != null) mBubbleProgress.setVisibility(View.GONE);
                 mBubbleView.setBackgroundResource(R.drawable.bg_bubble_idle);
                 mBubbleView.setContentDescription(getString(R.string.bubble_idle));
             }
@@ -212,10 +379,17 @@ public class BubbleService extends Service {
     }
 
     private void hideBubble() {
+        cancelIdleUnload();
+        isRecording = false;
+        isProcessing = false;
+        isReloading = false;
+        isModelUnloaded = false;
         if (mBubbleView != null && mWindowManager != null) {
             mWindowManager.removeView(mBubbleView);
             mBubbleView = null;
             mBubbleIcon = null;
+            mBubbleProgress = null;
+            mParams = null;
         }
         cleanupNative();
     }
@@ -224,9 +398,14 @@ public class BubbleService extends Service {
         mMainHandler.post(() -> {
             if (status != null && status.startsWith("Error")) {
                 isRecording = false;
+                if (isReloading) {
+                    // reloadThenRecord() owns the state reset and error toast.
+                    return;
+                }
                 isProcessing = false;
                 updateBubbleState();
                 Toast.makeText(this, status, Toast.LENGTH_SHORT).show();
+                scheduleIdleUnload();
             }
         });
     }
@@ -238,6 +417,7 @@ public class BubbleService extends Service {
         mMainHandler.post(() -> {
             isProcessing = false;
             updateBubbleState();
+            scheduleIdleUnload();
 
             if (text == null || text.trim().isEmpty()) return;
 
@@ -288,6 +468,7 @@ public class BubbleService extends Service {
 
     @Override
     public void onDestroy() {
+        cancelIdleUnload();
         hideBubble();
         super.onDestroy();
     }
@@ -301,4 +482,6 @@ public class BubbleService extends Service {
     private native void cleanupNative();
     private native void startRecordingNative();
     private native void stopRecordingNative();
+    private native boolean unloadNative();
+    private native boolean ensureEngineNative();
 }

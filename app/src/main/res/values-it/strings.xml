@@ -149,6 +149,19 @@
     <string name="bubble_notification_text">Tocca la bolla per registrare la voce</string>
     <string name="bubble_stop_recording">Ferma registrazione</string>
     <string name="bubble_hide">Nascondi bolla</string>
+    <string name="bubble_loading">Caricamento modello…</string>
+    <string name="bubble_load_failed">Impossibile caricare il modello. Riprova.</string>
+    <string name="bubble_unload_title">Scarica se inattiva</string>
+    <string name="bubble_unload_desc">Per risparmiare memoria e batteria, scarica il modello quando la bolla è rimasta inattiva per un po\'. La bolla resta visibile e utilizzabile; la prossima registrazione potrebbe richiedere un momento per ricaricare il modello.</string>
+    <string name="bubble_unload_never">Mai</string>
+    <string name="bubble_unload_5">5 min</string>
+    <string name="bubble_unload_15">15 min</string>
+    <string name="bubble_unload_30">30 min</string>
+    <string name="bubble_size_title">Dimensione bolla</string>
+    <string name="bubble_size_desc">Quanto è grande la bolla fluttuante sullo schermo.</string>
+    <string name="bubble_size_small">Piccola</string>
+    <string name="bubble_size_medium">Media</string>
+    <string name="bubble_size_large">Grande</string>
 
     <string name="section_a11y">Inserimento diretto (opzionale)</string>
     <string name="desc_a11y">Quando attivato, le trascrizioni della bolla vengono inserite direttamente nel campo di testo focalizzato tramite un servizio di accessibilità. Se l\'inserimento fallisce, il testo viene copiato negli appunti. Questo servizio scrive solo nel campo modificabile focalizzato; non legge né memorizza il contenuto dei campi e salta i campi password.</string>

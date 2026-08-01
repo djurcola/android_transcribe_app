@@ -151,6 +151,19 @@
     <string name="bubble_notification_text">Нажмите на пузырь для записи речи</string>
     <string name="bubble_stop_recording">Остановить запись</string>
     <string name="bubble_hide">Скрыть пузырь</string>
+    <string name="bubble_loading">Загрузка модели…</string>
+    <string name="bubble_load_failed">Не удалось загрузить модель. Попробуйте ещё раз.</string>
+    <string name="bubble_unload_title">Выгрузка при простое</string>
+    <string name="bubble_unload_desc">Чтобы экономить память и заряд батареи, выгружать модель, когда пузырь долго простаивает. Пузырь остаётся видимым и доступным; следующая запись может потребовать немного времени на перезагрузку модели.</string>
+    <string name="bubble_unload_never">Никогда</string>
+    <string name="bubble_unload_5">5 мин</string>
+    <string name="bubble_unload_15">15 мин</string>
+    <string name="bubble_unload_30">30 мин</string>
+    <string name="bubble_size_title">Размер пузыря</string>
+    <string name="bubble_size_desc">Насколько большим отображается плавающий пузырь на экране.</string>
+    <string name="bubble_size_small">Маленький</string>
+    <string name="bubble_size_medium">Средний</string>
+    <string name="bubble_size_large">Большой</string>
 
     <string name="section_a11y">Прямая вставка (необязательно)</string>
     <string name="desc_a11y">При включении транскрипции из пузыря вставляются непосредственно в фокусированное текстовое поле через службу специальных возможностей. При неудаче текст копируется в буфер обмена. Служба только записывает в фокусированное редактируемое поле; никогда не читает и не хранит содержимое полей и пропускает поля паролей.</string>

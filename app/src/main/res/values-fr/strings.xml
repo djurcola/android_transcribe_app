@@ -149,6 +149,19 @@
     <string name="bubble_notification_text">Touchez la bulle pour enregistrer la voix</string>
     <string name="bubble_stop_recording">Arrêter l\'enregistrement</string>
     <string name="bubble_hide">Masquer la bulle</string>
+    <string name="bubble_loading">Chargement du modèle…</string>
+    <string name="bubble_load_failed">Impossible de charger le modèle. Veuillez réessayer.</string>
+    <string name="bubble_unload_title">Décharger si inactive</string>
+    <string name="bubble_unload_desc">Pour économiser la mémoire et la batterie, décharge le modèle quand la bulle est restée inactive un moment. La bulle reste visible et utilisable ; le prochain enregistrement peut prendre un instant pour recharger le modèle.</string>
+    <string name="bubble_unload_never">Jamais</string>
+    <string name="bubble_unload_5">5 min</string>
+    <string name="bubble_unload_15">15 min</string>
+    <string name="bubble_unload_30">30 min</string>
+    <string name="bubble_size_title">Taille de la bulle</string>
+    <string name="bubble_size_desc">La taille de la bulle flottante à l\'écran.</string>
+    <string name="bubble_size_small">Petite</string>
+    <string name="bubble_size_medium">Moyenne</string>
+    <string name="bubble_size_large">Grande</string>
 
     <string name="section_a11y">Insertion directe (optionnel)</string>
     <string name="desc_a11y">Lorsque activé, les transcriptions de la bulle micro sont insérées directement dans le champ de texte focalisé via un service d\'accessibilité. En cas d\'échec, le texte est copié dans le presse-papiers. Ce service écrit uniquement dans le champ modifiable focalisé ; il ne lit ni ne stocke le contenu des champs et ignore les champs de mot de passe.</string>

@@ -149,6 +149,19 @@
     <string name="bubble_notification_text">Toque na bolha para gravar voz</string>
     <string name="bubble_stop_recording">Parar gravação</string>
     <string name="bubble_hide">Ocultar bolha</string>
+    <string name="bubble_loading">Carregando modelo…</string>
+    <string name="bubble_load_failed">Não foi possível carregar o modelo. Tente novamente.</string>
+    <string name="bubble_unload_title">Descarregar quando ociosa</string>
+    <string name="bubble_unload_desc">Para economizar memória e bateria, descarrega o modelo quando a bolha fica ociosa por um tempo. A bolha continua visível e utilizável; a próxima gravação pode levar um momento para recarregar o modelo.</string>
+    <string name="bubble_unload_never">Nunca</string>
+    <string name="bubble_unload_5">5 min</string>
+    <string name="bubble_unload_15">15 min</string>
+    <string name="bubble_unload_30">30 min</string>
+    <string name="bubble_size_title">Tamanho da bolha</string>
+    <string name="bubble_size_desc">O tamanho da bolha flutuante na tela.</string>
+    <string name="bubble_size_small">Pequeno</string>
+    <string name="bubble_size_medium">Médio</string>
+    <string name="bubble_size_large">Grande</string>
 
     <string name="section_a11y">Inserção direta (opcional)</string>
     <string name="desc_a11y">Quando ativado, as transcrições da bolha são inseridas diretamente no campo de texto focado via serviço de acessibilidade. Se falhar, o texto é copiado para a área de transferência. Este serviço apenas escreve no campo editável focado; nunca lê ou armazena conteúdo de campos e ignora campos de senha.</string>

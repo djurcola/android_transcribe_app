@@ -156,6 +156,19 @@
     <string name="bubble_notification_text">Tap the bubble to record speech</string>
     <string name="bubble_stop_recording">Stop recording</string>
     <string name="bubble_hide">Hide bubble</string>
+    <string name="bubble_loading">Loading model…</string>
+    <string name="bubble_load_failed">Couldn\'t load the model. Please try again.</string>
+    <string name="bubble_unload_title">Unload when idle</string>
+    <string name="bubble_unload_desc">To save memory and battery, unload the model once the bubble has sat idle for a while. The bubble stays visible and usable; the next recording may take a moment to reload the model.</string>
+    <string name="bubble_unload_never">Never</string>
+    <string name="bubble_unload_5">5 min</string>
+    <string name="bubble_unload_15">15 min</string>
+    <string name="bubble_unload_30">30 min</string>
+    <string name="bubble_size_title">Bubble size</string>
+    <string name="bubble_size_desc">How large the floating bubble appears on screen.</string>
+    <string name="bubble_size_small">Small</string>
+    <string name="bubble_size_medium">Medium</string>
+    <string name="bubble_size_large">Large</string>
 
     <!-- Accessibility direct insertion -->
     <string name="section_a11y">Direct text insertion (optional)</string>
