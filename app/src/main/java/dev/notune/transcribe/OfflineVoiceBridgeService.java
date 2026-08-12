@@ -53,6 +53,13 @@ public final class OfflineVoiceBridgeService extends Service {
     };
 
     private final IOfflineVoiceBridge.Stub binder = new IOfflineVoiceBridge.Stub() {
+        @Override public String pair() {
+            requirePairedPackage();
+            String capability = BridgePairingStore.createCapability();
+            BridgePairingStore.save(OfflineVoiceBridgeService.this,
+                    BridgePairingStore.FUTO_PACKAGE, capability);
+            return capability;
+        }
         @Override public void start(String capability, IOfflineVoiceBridgeCallback newCallback) {
             requireAuthorized(capability);
             if (newCallback == null) throw new IllegalArgumentException("callback required");
@@ -97,6 +104,19 @@ public final class OfflineVoiceBridgeService extends Service {
 
     private void requireAuthorized(String capability) {
         if (!isAuthorized(capability)) throw new SecurityException("Not paired");
+    }
+
+    private void requirePairedPackage() {
+        if (!isPairedPackage()) throw new SecurityException("Unsupported caller");
+    }
+
+    private boolean isPairedPackage() {
+        String[] packages = getPackageManager().getPackagesForUid(Binder.getCallingUid());
+        if (packages == null) return false;
+        for (String packageName : packages) {
+            if (BridgePairingStore.FUTO_PACKAGE.equals(packageName)) return true;
+        }
+        return false;
     }
 
     private boolean isAuthorized(String capability) {
