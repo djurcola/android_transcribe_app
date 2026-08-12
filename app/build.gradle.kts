@@ -50,6 +50,10 @@ android {
         }
     }
 
+    buildFeatures {
+        aidl = true
+    }
+
     // Source sets — the Rust-built .so files land in jniLibs via cargo-ndk
     sourceSets {
         getByName("main") {
