@@ -17,7 +17,7 @@
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>
         <!-- Explicit result-bearing pairing endpoint supplied by the FUTO follow-up. -->
-        <package android:name="org.futo.inputmethod.latin" />
+        <package android:name="org.futo.inputmethod.latin.unstable" />
         <intent>
             <action android:name="org.futo.inputmethod.latin.action.PAIR_OFFLINE_VOICE_BRIDGE" />
         </intent>

@@ -8,7 +8,9 @@ import java.security.SecureRandom;
 
 /** Private pairing record. Capability values must never be logged. */
 final class BridgePairingStore {
-    static final String FUTO_PACKAGE = "org.futo.inputmethod.latin";
+    // The custom APK is assembled as FUTO's unstable flavor. Its applicationId
+    // carries this suffix, while the namespace and pairing action do not.
+    static final String FUTO_PACKAGE = "org.futo.inputmethod.latin.unstable";
     static final String FUTO_PAIR_ACTION =
             "org.futo.inputmethod.latin.action.PAIR_OFFLINE_VOICE_BRIDGE";
     static final String EXTRA_CAPABILITY = "dev.notune.transcribe.extra.PAIRING_CAPABILITY";

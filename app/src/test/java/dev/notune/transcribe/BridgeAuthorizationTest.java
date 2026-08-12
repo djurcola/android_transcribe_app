@@ -7,12 +7,12 @@ import org.junit.Test;
 
 public class BridgeAuthorizationTest {
     @Test public void acceptsOnlyThePairedPackageAndCapability() {
-        assertTrue(BridgeAuthorization.isAuthorized("org.futo.inputmethod.latin", "secret",
-                "org.futo.inputmethod.latin", "secret"));
-        assertFalse(BridgeAuthorization.isAuthorized("org.futo.inputmethod.latin", "secret",
+        assertTrue(BridgeAuthorization.isAuthorized("org.futo.inputmethod.latin.unstable", "secret",
+                "org.futo.inputmethod.latin.unstable", "secret"));
+        assertFalse(BridgeAuthorization.isAuthorized("org.futo.inputmethod.latin.unstable", "secret",
                 "other.package", "secret"));
-        assertFalse(BridgeAuthorization.isAuthorized("org.futo.inputmethod.latin", "secret",
-                "org.futo.inputmethod.latin", "wrong"));
+        assertFalse(BridgeAuthorization.isAuthorized("org.futo.inputmethod.latin.unstable", "secret",
+                "org.futo.inputmethod.latin.unstable", "wrong"));
     }
 
     @Test public void rejectsMissingPairingMaterial() {
