@@ -1,6 +1,7 @@
 pub mod assets;
 pub mod audio;
 pub mod bubble;
+pub mod bridge;
 pub mod engine;
 pub mod ime;
 pub mod main_activity;

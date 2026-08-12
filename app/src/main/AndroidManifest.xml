@@ -16,6 +16,11 @@
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>
+        <!-- Explicit result-bearing pairing endpoint supplied by the FUTO follow-up. -->
+        <package android:name="org.futo.inputmethod.latin" />
+        <intent>
+            <action android:name="org.futo.inputmethod.latin.action.PAIR_OFFLINE_VOICE_BRIDGE" />
+        </intent>
     </queries>
 
     <application
@@ -114,6 +119,12 @@
                 android:name="android.speech"
                 android:resource="@xml/recognition_service" />
         </service>
+
+        <!-- On-demand authenticated Binder bridge for the paired FUTO IME only. -->
+        <service
+            android:name=".OfflineVoiceBridgeService"
+            android:foregroundServiceType="microphone"
+            android:exported="true" />
 
         <!-- IME Service -->
         <service
