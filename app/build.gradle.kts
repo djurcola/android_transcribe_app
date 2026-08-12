@@ -16,7 +16,7 @@ android {
         versionCode = 19
         versionName = "0.1.18"
         ndk {
-            abiFilters += "arm64-v8a"
+            abiFilters += setOf("arm64-v8a", "x86_64")
         }
     }
 
@@ -167,9 +167,49 @@ val cargoNdkBuild by tasks.registering(Exec::class) {
     outputs.upToDateWhen { false }
 }
 
+val cargoNdkBuildX86_64 by tasks.registering(Exec::class) {
+    description = "Build Rust native code for x86_64 emulators via cargo-ndk"
+    group = "build"
+
+    workingDir = rootProject.projectDir
+
+    val ndkDir = project.findProperty("ndk.dir")?.toString()
+        ?: System.getenv("ANDROID_NDK_HOME")
+        ?: System.getenv("ANDROID_NDK")
+        ?: android.ndkDirectory.absolutePath
+
+    environment("ANDROID_NDK_HOME", ndkDir)
+    environment("ANDROID_NDK_ROOT", ndkDir)
+    environment("ANDROID_NDK", ndkDir)
+
+    val jniLibsDir = project.file("src/main/jniLibs")
+    commandLine(
+        "cargo", "ndk",
+        "-t", "x86_64",
+        "-o", jniLibsDir.absolutePath,
+        "build", "--release"
+    )
+
+    doLast {
+        val ndkPath = environment["ANDROID_NDK_HOME"] as String
+        val libcpp = file("$ndkPath/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/libc++_shared.so")
+        if (!libcpp.exists()) {
+            throw GradleException("libc++_shared.so not found in NDK at: ${libcpp.absolutePath}")
+        }
+        val destDir = File(jniLibsDir, "x86_64")
+        destDir.mkdirs()
+        libcpp.copyTo(File(destDir, "libc++_shared.so"), overwrite = true)
+        println("Copied x86_64 libc++_shared.so from NDK")
+    }
+
+    outputs.dir(jniLibsDir)
+    outputs.upToDateWhen { false }
+}
+
 // Wire the cargo-ndk build into the Android build lifecycle
 tasks.named("preBuild") {
     dependsOn(cargoNdkBuild)
+    dependsOn(cargoNdkBuildX86_64)
 }
 
 // ---------------------------------------------------------------------------
