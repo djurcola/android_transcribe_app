@@ -1,6 +1,7 @@
 package dev.notune.transcribe;
 
 import android.content.Intent;
+import android.content.ComponentName;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.ColorStateList;
@@ -191,11 +192,14 @@ public class MainActivity extends AppCompatActivity {
 
     private void beginFutoPairing() {
         Intent pairing = new Intent(BridgePairingStore.FUTO_PAIR_ACTION)
-                .setPackage(BridgePairingStore.FUTO_PACKAGE);
-        if (getPackageManager().resolveActivity(pairing, PackageManager.MATCH_DEFAULT_ONLY) == null) {
-            snackbar(getString(R.string.bridge_pairing_unavailable));
-            return;
-        }
+                // FUTO's exported consent endpoint is known and pinned.  Do not
+                // preflight it with implicit resolution: Android's package
+                // visibility filtering can hide it even when the installed FUTO
+                // build supports pairing.  The endpoint independently verifies
+                // our caller and accepts only its exact action/extras contract.
+                .setComponent(new ComponentName(
+                        BridgePairingStore.FUTO_PACKAGE,
+                        "org.futo.inputmethod.latin.uix.actions.OfflineVoiceBridgePairingActivity"));
         new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.bridge_pairing_title)
                 .setMessage(R.string.bridge_pairing_consent)
