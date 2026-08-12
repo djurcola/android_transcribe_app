@@ -2,6 +2,7 @@ package dev.notune.transcribe;
 
 import android.content.Intent;
 import android.content.ComponentName;
+import android.net.Uri;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.ColorStateList;
@@ -207,6 +208,11 @@ public class MainActivity extends AppCompatActivity {
                 .setPositiveButton(R.string.bridge_pairing_continue, (d, w) -> {
                     pendingBridgeCapability = BridgePairingStore.createCapability();
                     pairing.putExtra(BridgePairingStore.EXTRA_CAPABILITY, pendingBridgeCapability);
+                    // Some Android builds omit getCallingPackage() for cross-app result
+                    // activities. FUTO accepts this standard android-app referrer only
+                    // alongside the exact action and unguessable pairing capability.
+                    pairing.putExtra(Intent.EXTRA_REFERRER,
+                            Uri.parse("android-app://" + getPackageName()));
                     try {
                         startActivityForResult(pairing, REQ_FUTO_PAIRING);
                     } catch (android.content.ActivityNotFoundException e) {
