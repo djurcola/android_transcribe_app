@@ -238,8 +238,6 @@ pub fn get_engine() -> Option<Arc<Mutex<Engine>>> {
 /// normal error, and a lock poisoned by an earlier panic is recovered instead
 /// of propagating the poison forever.
 pub fn transcribe_shared(engine: &Arc<Mutex<Engine>>, samples: Vec<f32>) -> Result<String, String> {
-    let audio_secs = samples.len() as f64 / 16_000.0;
-    let started = std::time::Instant::now();
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let mut guard = engine.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         guard.transcribe(samples)
@@ -248,11 +246,7 @@ pub fn transcribe_shared(engine: &Arc<Mutex<Engine>>, samples: Vec<f32>) -> Resu
         log::error!("transcription panicked; reporting as error");
         Err("transcription failed unexpectedly, please try again".to_string())
     });
-    log::info!(
-        "transcribed {:.1}s audio in {:.2}s",
-        audio_secs,
-        started.elapsed().as_secs_f64()
-    );
+    log::info!("transcription completed");
     result
 }
 

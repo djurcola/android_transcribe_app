@@ -6,7 +6,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use jni::objects::{GlobalRef, JObject};
 use jni::JNIEnv;
 
-use crate::engine;
+use crate::{audio, engine};
 
 // --- Optional auto-stop endpointing (same level heuristics as recog_service) --
 /// Absolute smoothed level (0..1) that must be exceeded to count as speech.
@@ -101,6 +101,10 @@ pub fn init_session(env: JNIEnv, target: JObject) -> VoiceSessionState {
 /// Java-side `onAutoStop()` callback, which is expected to stop the recording
 /// the same way a manual tap would.
 pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop: bool) {
+    // Always stop a previous stream before attempting a new recorder.
+    state.session_active.store(false, Ordering::SeqCst);
+    state.stream = None;
+
     let host = cpal::default_host();
     let device = match host.default_input_device() {
         Some(d) => d,
@@ -114,17 +118,23 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
         }
     };
 
-    let config = cpal::StreamConfig {
-        channels: 1,
-        sample_rate: cpal::SampleRate(16000),
-        buffer_size: cpal::BufferSize::Default,
+    let input_format = match audio::select_input_format(&device) {
+        Ok(format) => format,
+        Err(_) => {
+            log::error!("audio recorder config selection failed");
+            notify_status(
+                &mut env,
+                state.target_ref.as_obj(),
+                "Error: microphone recorder unavailable.",
+            );
+            return;
+        }
     };
 
     state.audio_buffer.lock().unwrap().clear();
     let buffer_clone = state.audio_buffer.clone();
 
-    // End any previous session's monitor, then arm a fresh flag.
-    state.session_active.store(false, Ordering::SeqCst);
+    // Arm a fresh flag after ending any previous session above.
     let session_active = Arc::new(AtomicBool::new(true));
     state.session_active = session_active.clone();
 
@@ -143,50 +153,120 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
     let last_sent = state.last_level_sent.clone();
     let endpoint_cb = endpoint.clone();
 
-    let stream = device.build_input_stream(
-        &config,
-        move |data: &[f32], _: &_| {
-            buffer_clone.lock().unwrap().extend_from_slice(data);
-
-            // compute RMS
-            let mut sum = 0.0f32;
-            for &x in data {
-                sum += x * x;
+    let converter = Arc::new(Mutex::new(audio::CaptureConverter::new(
+        input_format.config.channels,
+        input_format.config.sample_rate.0,
+    )));
+    let runtime_active = session_active.clone();
+    let runtime_jvm = state.jvm.clone();
+    let runtime_target = state.target_ref.clone();
+    let make_error = || {
+        let active = runtime_active.clone();
+        let callback_jvm = runtime_jvm.clone();
+        let callback_target = runtime_target.clone();
+        move |_| {
+            log::error!("audio recorder runtime failure");
+            active.store(false, Ordering::SeqCst);
+            if let Ok(mut callback_env) = callback_jvm.attach_current_thread() {
+                notify_status(
+                    &mut callback_env,
+                    callback_target.as_obj(),
+                    "Error: microphone recorder stopped.",
+                );
             }
-            let rms = (sum / (data.len().max(1) as f32)).sqrt();
+        }
+    };
+    let make_callback = |buffer: Arc<Mutex<Vec<f32>>>,
+                         jvm: Arc<jni::JavaVM>,
+                         target_ref: GlobalRef,
+                         last_sent: Arc<Mutex<Instant>>,
+                         endpoint: Option<Arc<Endpointing>>| {
+        move |samples: Vec<f32>| {
+            if samples.is_empty() {
+                return;
+            }
+            buffer.lock().unwrap().extend_from_slice(&samples);
+            let rms = (samples.iter().map(|x| x * x).sum::<f32>() / samples.len() as f32).sqrt();
             let level = (rms * 6.0).clamp(0.0, 1.0);
-
-            if let Some(ep) = &endpoint_cb {
+            if let Some(ep) = &endpoint {
                 let floor = *ep.noise_floor.lock().unwrap();
-                let is_speech = level > MIN_SPEECH_LEVEL && level > floor + SPEECH_MARGIN;
-                if is_speech {
+                if level > MIN_SPEECH_LEVEL && level > floor + SPEECH_MARGIN {
                     *ep.last_voice.lock().unwrap() = Instant::now();
                     ep.speech_started.store(true, Ordering::SeqCst);
                 } else {
-                    // Slowly adapt the noise floor while no speech is present.
                     let mut nf = ep.noise_floor.lock().unwrap();
                     *nf = *nf * 0.95 + level * 0.05;
                 }
             }
-
-            // throttle updates
             let mut last = last_sent.lock().unwrap();
-            if last.elapsed() >= std::time::Duration::from_millis(50) {
-                *last = std::time::Instant::now();
-
-                if let Ok(mut env) = jvm.attach_current_thread() {
-                    let obj = target_ref.as_obj();
-                    notify_level(&mut env, obj, level);
+            if last.elapsed() >= Duration::from_millis(50) {
+                *last = Instant::now();
+                drop(last);
+                if let Ok(mut callback_env) = jvm.attach_current_thread() {
+                    notify_level(&mut callback_env, target_ref.as_obj(), level);
                 }
             }
-        },
-        |e| log::error!("Stream err: {}", e),
-        None,
-    );
+        }
+    };
+    let stream = match input_format.sample_format {
+        cpal::SampleFormat::F32 => {
+            let callback = make_callback(
+                buffer_clone.clone(),
+                jvm.clone(),
+                target_ref.clone(),
+                last_sent.clone(),
+                endpoint_cb.clone(),
+            );
+            device.build_input_stream(
+                &input_format.config,
+                move |data: &[f32], _| callback(converter.lock().unwrap().convert(data)),
+                make_error(),
+                None,
+            )
+        }
+        cpal::SampleFormat::I16 => {
+            let callback = make_callback(
+                buffer_clone.clone(),
+                jvm.clone(),
+                target_ref.clone(),
+                last_sent.clone(),
+                endpoint_cb.clone(),
+            );
+            device.build_input_stream(
+                &input_format.config,
+                move |data: &[i16], _| {
+                    callback(converter.lock().unwrap().convert(&audio::i16_to_f32(data)))
+                },
+                make_error(),
+                None,
+            )
+        }
+        cpal::SampleFormat::U16 => {
+            let callback = make_callback(buffer_clone, jvm, target_ref, last_sent, endpoint_cb);
+            device.build_input_stream(
+                &input_format.config,
+                move |data: &[u16], _| {
+                    callback(converter.lock().unwrap().convert(&audio::u16_to_f32(data)))
+                },
+                make_error(),
+                None,
+            )
+        }
+        _ => unreachable!(),
+    };
 
     match stream {
         Ok(s) => {
-            s.play().ok();
+            if s.play().is_err() {
+                log::error!("audio recorder play failed");
+                state.session_active.store(false, Ordering::SeqCst);
+                notify_status(
+                    &mut env,
+                    state.target_ref.as_obj(),
+                    "Error: microphone recorder unavailable.",
+                );
+                return;
+            }
             state.stream = Some(SendStream(s));
             notify_status(&mut env, state.target_ref.as_obj(), "Listening...");
 
@@ -201,8 +281,7 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
                     }
                     let speech = ep.speech_started.load(Ordering::SeqCst);
                     let silence = ep.last_voice.lock().unwrap().elapsed();
-                    let done = (speech
-                        && silence >= Duration::from_millis(AUTO_STOP_SILENCE_MS))
+                    let done = (speech && silence >= Duration::from_millis(AUTO_STOP_SILENCE_MS))
                         || (!speech
                             && started_at.elapsed()
                                 >= Duration::from_millis(AUTO_STOP_NO_SPEECH_MS));
@@ -211,12 +290,8 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
                         // this monitor can't both fire.
                         if session_active.swap(false, Ordering::SeqCst) {
                             if let Ok(mut env) = jvm.attach_current_thread() {
-                                let _ = env.call_method(
-                                    target_ref.as_obj(),
-                                    "onAutoStop",
-                                    "()V",
-                                    &[],
-                                );
+                                let _ =
+                                    env.call_method(target_ref.as_obj(), "onAutoStop", "()V", &[]);
                             }
                         }
                         return;
@@ -224,11 +299,13 @@ pub fn start_recording(mut env: JNIEnv, state: &mut VoiceSessionState, auto_stop
                 });
             }
         }
-        Err(e) => {
+        Err(_) => {
+            log::error!("audio recorder open failed");
+            state.session_active.store(false, Ordering::SeqCst);
             notify_status(
                 &mut env,
                 state.target_ref.as_obj(),
-                &format!("Error: failed to open microphone: {}", e),
+                "Error: microphone recorder unavailable.",
             );
         }
     }

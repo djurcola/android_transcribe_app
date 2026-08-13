@@ -15,7 +15,15 @@ pub unsafe extern "system" fn Java_dev_notune_transcribe_OfflineVoiceBridgeServi
     _class: JClass,
     service: JObject,
 ) {
-    *BRIDGE_STATE.lock().unwrap() = Some(voice_session::init_session(env, service));
+    let mut state = BRIDGE_STATE.lock().unwrap();
+    if let Some(previous) = state.as_mut() {
+        log::info!("bridge lifecycle replacing active state");
+        previous
+            .session_active
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        previous.stream = None;
+    }
+    *state = Some(voice_session::init_session(env, service));
 }
 
 #[no_mangle]
@@ -25,6 +33,8 @@ pub unsafe extern "system" fn Java_dev_notune_transcribe_OfflineVoiceBridgeServi
 ) {
     if let Some(state) = BRIDGE_STATE.lock().unwrap().as_mut() {
         voice_session::start_recording(env, state, false);
+    } else {
+        log::error!("bridge lifecycle start without state");
     }
 }
 
@@ -55,7 +65,15 @@ pub unsafe extern "system" fn Java_dev_notune_transcribe_OfflineVoiceBridgeServi
     _env: JNIEnv,
     _class: JClass,
 ) {
-    *BRIDGE_STATE.lock().unwrap() = None;
+    let mut state = BRIDGE_STATE.lock().unwrap();
+    if let Some(active) = state.as_mut() {
+        active
+            .session_active
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        active.stream = None;
+    }
+    *state = None;
+    log::info!("bridge lifecycle unloaded");
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_millis(100));
         let _ = engine::unload_if_idle();
