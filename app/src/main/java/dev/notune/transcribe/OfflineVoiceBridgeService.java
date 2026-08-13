@@ -2,6 +2,7 @@ package dev.notune.transcribe;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
+import android.app.PendingIntent;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
@@ -14,6 +15,11 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.RemoteException;
+import android.util.Base64;
+
+import java.security.SecureRandom;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Authenticated, on-demand endpoint for the paired FUTO IME. */
 public final class OfflineVoiceBridgeService extends Service {
@@ -29,11 +35,19 @@ public final class OfflineVoiceBridgeService extends Service {
     private static final String CHANNEL_ID = "OfflineVoiceBridge";
     private static final int NOTIFICATION_ID = 23457;
     private static final long MAX_SESSION_MS = 60_000L;
+    private static final long FOREGROUND_TOKEN_TTL_MS = 10_000L;
+    private static final String ACTION_FOREGROUND_START =
+            "dev.notune.transcribe.action.OFFLINE_VOICE_BRIDGE_FOREGROUND_START";
+    private static final String EXTRA_FOREGROUND_NONCE =
+            "dev.notune.transcribe.extra.OFFLINE_VOICE_BRIDGE_FOREGROUND_NONCE";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private IOfflineVoiceBridgeCallback callback;
     private IBinder callbackBinder;
     private boolean active;
     private boolean nativeInitialized;
+    private volatile boolean foregroundReady;
+    private final SecureRandom secureRandom = new SecureRandom();
+    private final Map<String, Long> foregroundNonces = new HashMap<>();
     private final SharedPreferences.OnSharedPreferenceChangeListener pairingChanged =
             (preferences, key) -> {
                 if (active && !BridgePairingStore.isPaired(this)) handler.post(this::cleanup);
@@ -59,6 +73,24 @@ public final class OfflineVoiceBridgeService extends Service {
             BridgePairingStore.save(OfflineVoiceBridgeService.this,
                     BridgePairingStore.FUTO_PACKAGE, capability);
             return capability;
+        }
+        @Override public PendingIntent requestForegroundStart(String capability) {
+            requireAuthorized(capability);
+            byte[] bytes = new byte[32];
+            secureRandom.nextBytes(bytes);
+            String nonce = Base64.encodeToString(bytes, Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
+            synchronized (foregroundNonces) {
+                foregroundNonces.put(nonce, System.currentTimeMillis() + FOREGROUND_TOKEN_TTL_MS);
+            }
+            Intent intent = new Intent(OfflineVoiceBridgeService.this, OfflineVoiceBridgeService.class)
+                    .setAction(ACTION_FOREGROUND_START)
+                    .putExtra(EXTRA_FOREGROUND_NONCE, nonce);
+            return PendingIntent.getForegroundService(OfflineVoiceBridgeService.this, nonce.hashCode(), intent,
+                    PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
+        }
+        @Override public boolean isForegroundReady(String capability) {
+            requireAuthorized(capability);
+            return foregroundReady;
         }
         @Override public void start(String capability, IOfflineVoiceBridgeCallback newCallback) {
             requireAuthorized(capability);
@@ -89,6 +121,22 @@ public final class OfflineVoiceBridgeService extends Service {
     }
 
     @Override public IBinder onBind(Intent intent) { return binder; }
+
+    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_FOREGROUND_START.equals(intent.getAction())
+                && consumeForegroundNonce(intent.getStringExtra(EXTRA_FOREGROUND_NONCE))) {
+            foregroundReady = startBridgeForeground();
+        }
+        return START_NOT_STICKY;
+    }
+
+    private boolean consumeForegroundNonce(String nonce) {
+        if (nonce == null) return false;
+        synchronized (foregroundNonces) {
+            Long expiresAt = foregroundNonces.remove(nonce);
+            return expiresAt != null && expiresAt >= System.currentTimeMillis();
+        }
+    }
 
     @Override public boolean onUnbind(Intent intent) {
         handler.post(this::cleanup);
@@ -153,7 +201,7 @@ public final class OfflineVoiceBridgeService extends Service {
             return;
         }
         active = true;
-        if (!startBridgeForeground()) {
+        if (!foregroundReady) {
             deliverError(ERROR_UNAVAILABLE, getString(R.string.bridge_error_foreground_start));
             cleanup();
             return;
@@ -238,6 +286,8 @@ public final class OfflineVoiceBridgeService extends Service {
         callback = null;
         callbackBinder = null;
         active = false;
+        foregroundReady = false;
+        synchronized (foregroundNonces) { foregroundNonces.clear(); }
         stopForeground(STOP_FOREGROUND_REMOVE);
         if (nativeInitialized) {
             unloadNative();
