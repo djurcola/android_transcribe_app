@@ -24,7 +24,8 @@ final class BridgePairingStore {
     static String createCapability() {
         byte[] bytes = new byte[32];
         new SecureRandom().nextBytes(bytes);
-        return Base64.encodeToString(bytes, Base64.NO_WRAP | Base64.URL_SAFE);
+        return Base64.encodeToString(bytes,
+                Base64.NO_WRAP | Base64.NO_PADDING | Base64.URL_SAFE);
     }
 
     static void save(Context context, String packageName, String capability) {
