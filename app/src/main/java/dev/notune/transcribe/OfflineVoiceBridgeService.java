@@ -274,7 +274,10 @@ public final class OfflineVoiceBridgeService extends Service {
                         ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
             } else startForeground(NOTIFICATION_ID, notification);
             return true;
-        } catch (SecurityException | IllegalStateException ignored) {
+        } catch (RuntimeException ignored) {
+            // Includes ForegroundServiceStartNotAllowedException on Android 12+.
+            // The Binder client receives a recoverable foreground-start error instead
+            // of allowing the service process to terminate.
             return false;
         }
     }
