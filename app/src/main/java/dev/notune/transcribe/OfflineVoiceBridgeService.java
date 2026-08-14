@@ -36,9 +36,9 @@ public final class OfflineVoiceBridgeService extends Service {
     private static final int NOTIFICATION_ID = 23457;
     private static final long MAX_SESSION_MS = 60_000L;
     private static final long FOREGROUND_TOKEN_TTL_MS = 10_000L;
-    private static final String ACTION_FOREGROUND_START =
+    static final String ACTION_FOREGROUND_START =
             "dev.notune.transcribe.action.OFFLINE_VOICE_BRIDGE_FOREGROUND_START";
-    private static final String EXTRA_FOREGROUND_NONCE =
+    static final String EXTRA_FOREGROUND_NONCE =
             "dev.notune.transcribe.extra.OFFLINE_VOICE_BRIDGE_FOREGROUND_NONCE";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private IOfflineVoiceBridgeCallback callback;
@@ -82,10 +82,9 @@ public final class OfflineVoiceBridgeService extends Service {
             synchronized (foregroundNonces) {
                 foregroundNonces.put(nonce, System.currentTimeMillis() + FOREGROUND_TOKEN_TTL_MS);
             }
-            Intent intent = new Intent(OfflineVoiceBridgeService.this, OfflineVoiceBridgeService.class)
-                    .setAction(ACTION_FOREGROUND_START)
+            Intent intent = new Intent(OfflineVoiceBridgeService.this, ForegroundActivationActivity.class)
                     .putExtra(EXTRA_FOREGROUND_NONCE, nonce);
-            return PendingIntent.getForegroundService(OfflineVoiceBridgeService.this, nonce.hashCode(), intent,
+            return PendingIntent.getActivity(OfflineVoiceBridgeService.this, nonce.hashCode(), intent,
                     PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
         }
         @Override public boolean isForegroundReady(String capability) {
@@ -121,6 +120,14 @@ public final class OfflineVoiceBridgeService extends Service {
     }
 
     @Override public IBinder onBind(Intent intent) { return binder; }
+
+    static Intent foregroundStartIntent(String nonce) {
+        return new Intent()
+                .setClassName(OfflineVoiceBridgeService.class.getPackage().getName(),
+                        OfflineVoiceBridgeService.class.getName())
+                .setAction(ACTION_FOREGROUND_START)
+                .putExtra(EXTRA_FOREGROUND_NONCE, nonce);
+    }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_FOREGROUND_START.equals(intent.getAction())

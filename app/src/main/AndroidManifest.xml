@@ -30,6 +30,14 @@
         android:theme="@style/AppTheme"
         android:hasCode="true">
 
+        <!-- Internal one-shot handoff for microphone foreground-service promotion. -->
+        <activity
+            android:name=".ForegroundActivationActivity"
+            android:theme="@style/AppTheme.ForegroundActivation"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
         <!-- Main Activity -->
         <activity
             android:name=".MainActivity"
