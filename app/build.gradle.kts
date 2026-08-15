@@ -5,6 +5,25 @@ plugins {
     id("com.android.application")
 }
 
+val ciTestSigningInputs = mapOf(
+    "ANDROID_TEST_KEYSTORE_PATH" to System.getenv("ANDROID_TEST_KEYSTORE_PATH"),
+    "ANDROID_TEST_KEYSTORE_PASSWORD" to System.getenv("ANDROID_TEST_KEYSTORE_PASSWORD"),
+    "ANDROID_TEST_KEY_ALIAS" to System.getenv("ANDROID_TEST_KEY_ALIAS"),
+    "ANDROID_TEST_KEY_PASSWORD" to System.getenv("ANDROID_TEST_KEY_PASSWORD"),
+)
+val hasCiTestSigningInputs = ciTestSigningInputs.values.all { !it.isNullOrBlank() }
+val isCi = System.getenv("CI")?.equals("true", ignoreCase = true) == true
+
+if (isCi && !hasCiTestSigningInputs) {
+    val missing = ciTestSigningInputs.filterValues { it.isNullOrBlank() }.keys.joinToString(", ")
+    throw GradleException("CI test signing is required; missing or empty: $missing")
+}
+
+val ciTestKeystore = ciTestSigningInputs.getValue("ANDROID_TEST_KEYSTORE_PATH")?.let(::File)
+if (hasCiTestSigningInputs && (ciTestKeystore == null || !ciTestKeystore.isFile)) {
+    throw GradleException("CI test signing keystore is not a file: ${ciTestSigningInputs.getValue("ANDROID_TEST_KEYSTORE_PATH")}")
+}
+
 android {
     namespace = "dev.notune.transcribe"
     compileSdk = 35
@@ -21,18 +40,40 @@ android {
     }
 
     signingConfigs {
+        if (hasCiTestSigningInputs) {
+            getByName("debug") {
+                storeFile = ciTestKeystore
+                storePassword = ciTestSigningInputs.getValue("ANDROID_TEST_KEYSTORE_PASSWORD")
+                keyAlias = ciTestSigningInputs.getValue("ANDROID_TEST_KEY_ALIAS")
+                keyPassword = ciTestSigningInputs.getValue("ANDROID_TEST_KEY_PASSWORD")
+            }
+        }
+
         create("release") {
-            val ksFile = rootProject.file("release.keystore")
-            if (ksFile.exists()) {
-                storeFile = ksFile
-                storePassword = System.getenv("STORE_PASS") ?: "password"
-                keyAlias = System.getenv("KEY_ALIAS") ?: "release"
-                keyPassword = System.getenv("KEY_PASS") ?: "password"
+            if (hasCiTestSigningInputs) {
+                storeFile = ciTestKeystore
+                storePassword = ciTestSigningInputs.getValue("ANDROID_TEST_KEYSTORE_PASSWORD")
+                keyAlias = ciTestSigningInputs.getValue("ANDROID_TEST_KEY_ALIAS")
+                keyPassword = ciTestSigningInputs.getValue("ANDROID_TEST_KEY_PASSWORD")
+            } else {
+                // Keep the existing local release-keystore fallback.
+                val ksFile = rootProject.file("release.keystore")
+                if (ksFile.exists()) {
+                    storeFile = ksFile
+                    storePassword = System.getenv("STORE_PASS") ?: "password"
+                    keyAlias = System.getenv("KEY_ALIAS") ?: "release"
+                    keyPassword = System.getenv("KEY_PASS") ?: "password"
+                }
             }
         }
     }
 
     buildTypes {
+        debug {
+            if (hasCiTestSigningInputs) {
+                signingConfig = signingConfigs.getByName("debug")
+            }
+        }
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("release")
